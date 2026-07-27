@@ -1124,8 +1124,11 @@ const equalYTypePNode = (ytype, pnode) => {
 }
 
 /**
- * @param {PModel.Node | Array<PModel.Node> | undefined} mapped
- * @param {PModel.Node | Array<PModel.Node>} pcontent
+ * For a given Y type and ProseMirror node content, check if the ProseMirror node content is the same as the mapped ProseMirror node content.
+ *
+ * @param {PModel.Node | Array<PModel.Node> | undefined} mapped The ProseMirror node content that is mapped to the Y type.
+ * @param {PModel.Node | Array<PModel.Node>} pcontent The ProseMirror node content to compare against the mapped content.
+ * @returns {boolean} Returns true if the mapped content is the same as the ProseMirror node content, false otherwise.
  */
 const mappedIdentity = (mapped, pcontent) =>
   mapped === pcontent ||
@@ -1133,6 +1136,143 @@ const mappedIdentity = (mapped, pcontent) =>
     mapped.length === pcontent.length && mapped.every((a, i) =>
     pcontent[i] === a
   ))
+
+/**
+ * @typedef {{ yIndex: number, pIndex: number, yChild: Y.XmlElement | Y.XmlText | Y.XmlHook }} MappedChildAnchor
+ */
+
+/**
+ * Find the longest sequence of mapped children that still appears in the same
+ * order. Keeping those Y types prevents a structural move from reusing an
+ * unchanged sibling as a different ProseMirror node.
+ *
+ * @param {Array<Y.XmlElement | Y.XmlText | Y.XmlHook>} yChildren
+ * @param {NormalizedPNodeContent} pChildren
+ * @param {BindingMetadata} meta
+ * @return {Array<MappedChildAnchor>}
+ */
+const findMappedChildAnchors = (yChildren, pChildren, meta) => {
+  const pChildIndices = new Map()
+  pChildren.forEach((pChild, index) => pChildIndices.set(pChild, index))
+  const candidates = []
+
+  yChildren.forEach((yChild, yIndex) => {
+    const mapped = meta.mapping.get(yChild)
+    const pIndex = pChildIndices.get(mapped)
+    if (pIndex !== undefined && mappedIdentity(mapped, pChildren[pIndex])) {
+      candidates.push({ yIndex, pIndex, yChild })
+    }
+  })
+  if (candidates.length === 0) {
+    return []
+  }
+
+  const predecessors = new Array(candidates.length)
+  const tails = []
+  for (let index = 0; index < candidates.length; index++) {
+    let low = 0
+    let high = tails.length
+    while (low < high) {
+      const middle = (low + high) >> 1
+      if (candidates[tails[middle]].pIndex < candidates[index].pIndex) {
+        low = middle + 1
+      } else {
+        high = middle
+      }
+    }
+    predecessors[index] = low > 0 ? tails[low - 1] : -1
+    tails[low] = index
+  }
+
+  const anchors = []
+  for (let index = tails[tails.length - 1]; index !== -1; index = predecessors[index]) {
+    anchors.push(candidates[index])
+  }
+  return anchors.reverse()
+}
+
+/**
+ * @param {Y.XmlFragment} yDomFragment
+ * @param {number} index
+ * @param {number} length
+ * @param {BindingMetadata} meta
+ */
+const deleteYChildren = (yDomFragment, index, length, meta) => {
+  if (length > 0) {
+    yDomFragment.slice(index, index + length).forEach(type => meta.mapping.delete(type))
+    yDomFragment.delete(index, length)
+  }
+}
+
+/**
+ * @param {Y.XmlFragment} yDomFragment
+ * @param {number} index
+ * @param {NormalizedPNodeContent} pChildren
+ * @param {number} start
+ * @param {number} end
+ * @param {BindingMetadata} meta
+ */
+const insertPChildren = (yDomFragment, index, pChildren, start, end, meta) => {
+  if (start < end) {
+    const children = []
+    for (let childIndex = start; childIndex < end; childIndex++) {
+      children.push(createTypeFromTextOrElementNode(pChildren[childIndex], meta))
+    }
+    yDomFragment.insert(index, children)
+  }
+}
+
+/**
+ * @param {{ transact: Function }} y
+ * @param {Y.XmlFragment} yDomFragment
+ * @param {NormalizedPNodeContent} pChildren
+ * @param {Array<Y.XmlElement | Y.XmlText | Y.XmlHook>} yChildren
+ * @param {BindingMetadata} meta
+ * @return {boolean}
+ */
+const reconcileMappedChildren = (y, yDomFragment, pChildren, yChildren, meta) => {
+  const anchors = findMappedChildAnchors(yChildren, pChildren, meta)
+  if (
+    anchors.length < 2 ||
+    !anchors.some(anchor => anchor.yIndex !== anchor.pIndex) ||
+    anchors.some(anchor => {
+      const pChild = pChildren[anchor.pIndex]
+      return !(
+        (anchor.yChild instanceof Y.XmlText && pChild instanceof Array) ||
+        (anchor.yChild instanceof Y.XmlElement && !(pChild instanceof Array))
+      )
+    })
+  ) {
+    return false
+  }
+
+  let yIndex = 0
+  let pIndex = 0
+  for (const anchor of anchors) {
+    deleteYChildren(yDomFragment, pIndex, anchor.yIndex - yIndex, meta)
+    insertPChildren(yDomFragment, pIndex, pChildren, pIndex, anchor.pIndex, meta)
+
+    const pChild = pChildren[anchor.pIndex]
+    if (anchor.yChild instanceof Y.XmlText && pChild instanceof Array) {
+      if (!equalYTextPText(anchor.yChild, pChild)) {
+        updateYText(anchor.yChild, pChild, meta)
+      }
+    } else {
+      updateYFragment(
+        y,
+        /** @type {Y.XmlFragment} */ (anchor.yChild),
+        pChild,
+        meta
+      )
+    }
+    yIndex = anchor.yIndex + 1
+    pIndex = anchor.pIndex + 1
+  }
+
+  deleteYChildren(yDomFragment, pIndex, yChildren.length - yIndex, meta)
+  insertPChildren(yDomFragment, pIndex, pChildren, pIndex, pChildren.length, meta)
+  return true
+}
 
 /**
  * @param {Y.XmlElement} ytype
@@ -1310,6 +1450,9 @@ export const updateYFragment = (y, yDomFragment, pNode, meta) => {
   const yChildren = yDomFragment.toArray()
   const yChildCnt = yChildren.length
   const minCnt = math.min(pChildCnt, yChildCnt)
+  if (reconcileMappedChildren(y, yDomFragment, pChildren, yChildren, meta)) {
+    return
+  }
   let left = 0
   let right = 0
   // find number of matching elements from left
