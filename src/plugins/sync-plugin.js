@@ -1142,9 +1142,7 @@ const mappedIdentity = (mapped, pcontent) =>
  */
 
 /**
- * Find the longest sequence of mapped children that still appears in the same
- * order. Keeping those Y types prevents a structural move from reusing an
- * unchanged sibling as a different ProseMirror node.
+ * Find mapped children that retain their relative order after a move.
  *
  * @param {Array<Y.XmlElement | Y.XmlText | Y.XmlHook>} yChildren
  * @param {NormalizedPNodeContent} pChildren
