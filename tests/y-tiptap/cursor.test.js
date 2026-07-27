@@ -4,9 +4,7 @@ import * as promise from 'lib0/promise'
 import { Awareness } from 'y-protocols/awareness'
 import { TextSelection } from 'prosemirror-state'
 import {
-  absolutePositionToRelativePosition,
-  yCursorPluginKey,
-  ySyncPluginKey
+  yCursorPluginKey
 } from '../../src/y-tiptap.js'
 import {
   createViewWithCursor,
@@ -41,24 +39,8 @@ export const testRemoteCursorSurvivesStructuralChange = (_tc) => {
   const typingCursorPos = 1 + 'hello'.length
   t.assert(typingCursorPos === 6, 'precondition: cursor position in first paragraph')
 
-  const ystate = ySyncPluginKey.getState(view.state)
-  const yXmlFragment = ystate.type
   const remoteClientId = 2
-  const anchorRel = absolutePositionToRelativePosition(
-    typingCursorPos,
-    yXmlFragment,
-    ystate.binding.mapping
-  )
-  const headRel = absolutePositionToRelativePosition(
-    typingCursorPos,
-    yXmlFragment,
-    ystate.binding.mapping
-  )
-  awareness.states.set(remoteClientId, {
-    user: { name: 'Remote User', color: '#ff0000' },
-    cursor: { anchor: anchorRel, head: headRel }
-  })
-  view.dispatch(view.state.tr.setMeta(yCursorPluginKey, { awarenessUpdated: true }))
+  publishRemoteCursor(view, awareness, remoteClientId, typingCursorPos)
 
   // Simulate drag-and-drop: move the second block above the first paragraph.
   const blockNode = initialDoc.child(1)
@@ -72,22 +54,7 @@ export const testRemoteCursorSurvivesStructuralChange = (_tc) => {
 
   // Simulate the remote user re-publishing their cursor after the structural change
   // (e.g. continued typing once the drag-and-drop update has been applied).
-  const ystateAfter = ySyncPluginKey.getState(view.state)
-  const refreshedAnchorRel = absolutePositionToRelativePosition(
-    expectedCursorPos,
-    ystateAfter.type,
-    ystateAfter.binding.mapping
-  )
-  const refreshedHeadRel = absolutePositionToRelativePosition(
-    expectedCursorPos,
-    ystateAfter.type,
-    ystateAfter.binding.mapping
-  )
-  awareness.states.set(remoteClientId, {
-    user: { name: 'Remote User', color: '#ff0000' },
-    cursor: { anchor: refreshedAnchorRel, head: refreshedHeadRel }
-  })
-  view.dispatch(view.state.tr.setMeta(yCursorPluginKey, { awarenessUpdated: true }))
+  publishRemoteCursor(view, awareness, remoteClientId, expectedCursorPos)
 
   const decos = yCursorPluginKey.getState(view.state)
   const found = decos.find(0, view.state.doc.content.size)

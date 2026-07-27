@@ -128,10 +128,6 @@ export const testIsMisresolvedAfterStructuralChange = (_tc) => {
     'when text, attrs and offset all agree the Yjs resolution should be trusted'
   )
 }
-
-/**
- * @param {t.TestCase} _tc
- */
 export const testIsStructuralTransaction = (_tc) => {
   const ydoc = new Y.Doc()
   const view = createNewProsemirrorView(ydoc)

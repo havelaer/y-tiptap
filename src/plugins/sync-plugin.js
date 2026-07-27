@@ -1153,7 +1153,11 @@ const mappedIdentity = (mapped, pcontent) =>
  */
 const findMappedChildAnchors = (yChildren, pChildren, meta) => {
   const pChildIndices = new Map()
-  pChildren.forEach((pChild, index) => pChildIndices.set(pChild, index))
+  pChildren.forEach((pChild, index) => {
+    if (!pChildIndices.has(pChild)) {
+      pChildIndices.set(pChild, index)
+    }
+  })
   const candidates = []
 
   yChildren.forEach((yChild, yIndex) => {

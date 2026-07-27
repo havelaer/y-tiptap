@@ -20,23 +20,6 @@ export const testSelectionFallbackWhenOnlyHeadMisresolves = (_tc) => {
   ])
 
   const relSel = { absAnchor: 6, absHead: 12 }
-  const resolvedAnchor = 13
-  const resolvedHead = 1
-
-  const oldConditionTriggers =
-    relSel.absAnchor > 1 &&
-    resolvedAnchor !== null &&
-    resolvedHead !== null &&
-    resolvedAnchor <= 1
-  const newConditionTriggers =
-    relSel.absHead > 1 &&
-    resolvedHead !== null &&
-    resolvedHead <= 1
-
-  t.assert(
-    !oldConditionTriggers && newConditionTriggers,
-    'only the updated fallback condition should handle head-only misresolution'
-  )
 
   const remappedHead = findAbsolutePositionAfterStructuralChange(
     oldDoc,
