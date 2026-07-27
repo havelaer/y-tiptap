@@ -1228,6 +1228,68 @@ const insertPChildren = (yDomFragment, index, pChildren, start, end, meta) => {
 
 /**
  * @param {{ transact: Function }} y
+ * @param {Y.XmlElement | Y.XmlText | Y.XmlHook} yChild
+ * @param {PModel.Node | Array<PModel.Node>} pChild
+ * @param {BindingMetadata} meta
+ * @return {boolean}
+ */
+const updateMatchingYChild = (y, yChild, pChild, meta) => {
+  if (yChild instanceof Y.XmlText && pChild instanceof Array) {
+    if (equalYTextPText(yChild, pChild)) {
+      meta.mapping.set(yChild, pChild)
+    } else {
+      updateYText(yChild, pChild, meta)
+    }
+    return true
+  }
+  if (yChild instanceof Y.XmlElement && !(pChild instanceof Array) && matchNodeName(yChild, pChild)) {
+    if (equalYTypePNode(yChild, pChild)) {
+      meta.mapping.set(yChild, pChild)
+    } else {
+      updateYFragment(y, yChild, pChild, meta)
+    }
+    return true
+  }
+  return false
+}
+
+/**
+ * @param {{ transact: Function }} y
+ * @param {Y.XmlFragment} yDomFragment
+ * @param {NormalizedPNodeContent} pChildren
+ * @param {Array<Y.XmlElement | Y.XmlText | Y.XmlHook>} yChildren
+ * @param {number} yStart
+ * @param {number} yEnd
+ * @param {number} pStart
+ * @param {number} pEnd
+ * @param {BindingMetadata} meta
+ */
+const reconcileUnanchoredChildren = (
+  y,
+  yDomFragment,
+  pChildren,
+  yChildren,
+  yStart,
+  yEnd,
+  pStart,
+  pEnd,
+  meta
+) => {
+  const matchingChildren = math.min(yEnd - yStart, pEnd - pStart)
+  for (let index = 0; index < matchingChildren; index++) {
+    const yChild = yChildren[yStart + index]
+    const pChild = pChildren[pStart + index]
+    if (!updateMatchingYChild(y, yChild, pChild, meta)) {
+      deleteYChildren(yDomFragment, pStart + index, 1, meta)
+      insertPChildren(yDomFragment, pStart + index, pChildren, pStart + index, pStart + index + 1, meta)
+    }
+  }
+  deleteYChildren(yDomFragment, pStart + matchingChildren, yEnd - yStart - matchingChildren, meta)
+  insertPChildren(yDomFragment, pStart + matchingChildren, pChildren, pStart + matchingChildren, pEnd, meta)
+}
+
+/**
+ * @param {{ transact: Function }} y
  * @param {Y.XmlFragment} yDomFragment
  * @param {NormalizedPNodeContent} pChildren
  * @param {Array<Y.XmlElement | Y.XmlText | Y.XmlHook>} yChildren
@@ -1253,28 +1315,35 @@ const reconcileMappedChildren = (y, yDomFragment, pChildren, yChildren, meta) =>
   let yIndex = 0
   let pIndex = 0
   for (const anchor of anchors) {
-    deleteYChildren(yDomFragment, pIndex, anchor.yIndex - yIndex, meta)
-    insertPChildren(yDomFragment, pIndex, pChildren, pIndex, anchor.pIndex, meta)
+    reconcileUnanchoredChildren(
+      y,
+      yDomFragment,
+      pChildren,
+      yChildren,
+      yIndex,
+      anchor.yIndex,
+      pIndex,
+      anchor.pIndex,
+      meta
+    )
 
     const pChild = pChildren[anchor.pIndex]
-    if (anchor.yChild instanceof Y.XmlText && pChild instanceof Array) {
-      if (!equalYTextPText(anchor.yChild, pChild)) {
-        updateYText(anchor.yChild, pChild, meta)
-      }
-    } else {
-      updateYFragment(
-        y,
-        /** @type {Y.XmlFragment} */ (anchor.yChild),
-        pChild,
-        meta
-      )
-    }
+    updateMatchingYChild(y, anchor.yChild, pChild, meta)
     yIndex = anchor.yIndex + 1
     pIndex = anchor.pIndex + 1
   }
 
-  deleteYChildren(yDomFragment, pIndex, yChildren.length - yIndex, meta)
-  insertPChildren(yDomFragment, pIndex, pChildren, pIndex, pChildren.length, meta)
+  reconcileUnanchoredChildren(
+    y,
+    yDomFragment,
+    pChildren,
+    yChildren,
+    yIndex,
+    yChildren.length,
+    pIndex,
+    pChildren.length,
+    meta
+  )
   return true
 }
 
