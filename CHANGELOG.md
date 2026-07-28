@@ -1,5 +1,11 @@
 # @tiptap/y-tiptap
 
+## 3.0.8
+
+### Patch Changes
+
+- 8008de0: Preserve text ownership while paragraphs are reordered concurrently with typing.
+
 ## 3.0.7
 
 ### Patch Changes
