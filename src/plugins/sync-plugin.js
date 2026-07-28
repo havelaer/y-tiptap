@@ -1225,6 +1225,9 @@ const insertPChildren = (yDomFragment, index, pChildren, start, end, meta) => {
 }
 
 /**
+ * Updates a Y child in place when it still lines up with the ProseMirror child.
+ * Recreating it instead would drop concurrent remote edits on that child.
+ *
  * @param {{ transact: Function }} y
  * @param {Y.XmlElement | Y.XmlText | Y.XmlHook} yChild
  * @param {PModel.Node | Array<PModel.Node>} pChild
@@ -1252,6 +1255,9 @@ const updateMatchingYChild = (y, yChild, pChild, meta) => {
 }
 
 /**
+ * Reconciles the children between two anchors by position, then deletes or
+ * inserts to make up the length difference.
+ *
  * @param {{ transact: Function }} y
  * @param {Y.XmlFragment} yDomFragment
  * @param {NormalizedPNodeContent} pChildren
@@ -1287,6 +1293,10 @@ const reconcileUnanchoredChildren = (
 }
 
 /**
+ * Reconciles a fragment whose children were reordered, keeping the Y types of the
+ * anchors. The left/right diff in `updateYFragment` mismatches on both ends after
+ * a move, so it rebuilds the middle and drops text that is still being edited.
+ *
  * @param {{ transact: Function }} y
  * @param {Y.XmlFragment} yDomFragment
  * @param {NormalizedPNodeContent} pChildren
@@ -1296,6 +1306,8 @@ const reconcileUnanchoredChildren = (
  */
 const reconcileMappedChildren = (y, yDomFragment, pChildren, yChildren, meta) => {
   const anchors = findMappedChildAnchors(yChildren, pChildren, meta)
+  // A move needs two anchors with at least one of them at a new index; less than
+  // that is a plain edit. Mismatched kinds cannot be updated in place.
   if (
     anchors.length < 2 ||
     !anchors.some(anchor => anchor.yIndex !== anchor.pIndex) ||
