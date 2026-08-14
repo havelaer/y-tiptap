@@ -1,7 +1,15 @@
 import * as t from 'lib0/testing'
 import * as Y from 'yjs'
 import * as promise from 'lib0/promise'
-import { redo, undo, ySyncPluginKey } from '../../src/y-tiptap.js'
+import { EditorState, Plugin } from 'prosemirror-state'
+import { EditorView } from 'prosemirror-view'
+import {
+  redo,
+  undo,
+  ySyncPlugin,
+  ySyncPluginKey,
+  yUndoPlugin
+} from '../../src/y-tiptap.js'
 import {
   createNewComplexProsemirrorView,
   createNewProsemirrorView,
@@ -87,6 +95,49 @@ export const testAddToHistory = (_tc) => {
     yxml.length === 2 && yxml.get(0).length === 1,
     'insertion was *not* undone'
   )
+}
+
+export const testAddToHistoryAfterNestedMetadataDispatch = (_tc) => {
+  const ydoc = new Y.Doc()
+  const yXmlFragment = ydoc.get('prosemirror', Y.XmlFragment)
+  let armed = false
+  let dispatched = false
+  const nestedDispatchPlugin = new Plugin({
+    view: () => ({
+      update: (view) => {
+        if (!armed || dispatched) {
+          return
+        }
+        dispatched = true
+        view.dispatch(view.state.tr.setMeta('addToHistory', false))
+      }
+    })
+  })
+  const view = new EditorView(null, {
+    // @ts-ignore
+    state: EditorState.create({
+      schema,
+      plugins: [
+        nestedDispatchPlugin,
+        ySyncPlugin(yXmlFragment),
+        yUndoPlugin()
+      ]
+    })
+  })
+  const initialDoc = view.state.doc
+  const initialContent = yXmlFragment.toString()
+
+  armed = true
+  view.dispatch(view.state.tr.insertText('x', 1))
+
+  t.assert(dispatched, 'nested metadata transaction was dispatched')
+  t.assert(view.state.doc.textContent === 'x', 'insertion reached ProseMirror')
+  t.assert(yXmlFragment.toString() === '<paragraph>x</paragraph>', 'insertion reached Yjs')
+
+  undo(view.state)
+
+  t.assert(view.state.doc.eq(initialDoc), 'undo restored the initial ProseMirror document')
+  t.assert(yXmlFragment.toString() === initialContent, 'undo restored the initial Yjs content')
 }
 
 /**
