@@ -2,4 +2,4 @@
 '@tiptap/y-tiptap': patch
 ---
 
-Keep local content changes undoable when nested focus updates dispatch during synchronization.
+Prevent nested focus and blur updates from causing local content changes to be skipped by undo history.
