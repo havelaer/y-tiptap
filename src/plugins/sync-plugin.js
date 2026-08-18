@@ -146,7 +146,9 @@ export const ySyncPlugin = (yXmlFragment, {
             pluginState[key] = change[key]
           }
         }
-        pluginState.addToHistory = tr.getMeta('addToHistory') !== false
+        if (tr.docChanged) {
+          pluginState.addToHistory = tr.getMeta('addToHistory') !== false
+        }
         // always set isChangeOrigin. If undefined, this is not change origin.
         pluginState.isChangeOrigin = change !== undefined &&
           !!change.isChangeOrigin
