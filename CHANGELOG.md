@@ -1,5 +1,11 @@
 # @tiptap/y-tiptap
 
+## 3.0.9
+
+### Patch Changes
+
+- da3e26f: Prevent nested focus and blur updates from causing local content changes to be skipped by undo history.
+
 ## 3.0.8
 
 ### Patch Changes
