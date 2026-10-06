@@ -228,6 +228,10 @@ export const ySyncPlugin = (yXmlFragment, {
                 }
               }
               binding.mux(() => {
+                // Yjs may have changed before this editor's fragment observer runs.
+                if (binding.applyingTransactions) {
+                  return
+                }
                 /** @type {Y.Doc} */ (pluginState.doc).transact((tr) => {
                   tr.meta.set('addToHistory', pluginState.addToHistory)
                   binding._prosemirrorChanged(view.state.doc)
@@ -455,7 +459,9 @@ export class ProsemirrorBinding {
      * current selection as relative positions in the Yjs model
      */
     this.beforeTransactionSelection = null
+    this.applyingTransactions = false
     this.beforeAllTransactions = () => {
+      this.applyingTransactions = true
       if (this.beforeTransactionSelection === null && this.prosemirrorView != null) {
         this.beforeTransactionSelection = getRelativeSelection(
           this,
@@ -464,6 +470,7 @@ export class ProsemirrorBinding {
       }
     }
     this.afterAllTransactions = () => {
+      this.applyingTransactions = false
       this.beforeTransactionSelection = null
     }
     this._domSelectionInView = null

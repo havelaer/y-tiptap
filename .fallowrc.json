@@ -1,0 +1,3 @@
+{
+  "entry": ["tests/index.js", "tests/index.node.js"]
+}
